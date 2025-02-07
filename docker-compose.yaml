@@ -148,10 +148,13 @@ services:
     image: minio/minio
     container_name: minio
     restart: unless-stopped
-    command: server /data --console-address ":9001"
+    command: server /data --console-address ":9101"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "9100:9100"
+      - "9101:9101"
     volumes:
       - minio_data:/data
     networks:
@@ -164,7 +167,7 @@ services:
       - minio
     entrypoint: >
       /bin/sh -c "
-      /usr/bin/mc alias set minio http://minio:9000 minioadmin miniosecret &&
+      /usr/bin/mc alias set minio http://minio:9100 minioadmin miniosecret &&
       /usr/bin/mc ls minio/chatwoot-storage || /usr/bin/mc mb minio/chatwoot-storage;
       exit 0;
       "
