@@ -148,17 +148,18 @@ services:
     image: minio/minio
     container_name: minio
     restart: unless-stopped
-    command: server /data --console-address ":9101"
+    command: server /data --address ":9100" --console-address ":9101"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     ports:
-      - "9100:9100"
-      - "9101:9101"
+      - "9100:9100"  # ✅ MinIO API Port
+      - "9101:9101"  # ✅ MinIO Console Port
     volumes:
       - minio_data:/data
     networks:
       - evolution-network
+
 
   minio-client:
     image: minio/mc
