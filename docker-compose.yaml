@@ -1,95 +1,62 @@
-# docker-compose.yaml
-version: '3.8'
-
 services:
   postgres-evolution:
     image: postgres:14
-    container_name: postgres-evolution
-    hostname: postgres-evolution
-    restart: always
-    volumes:
-      - ./database/evolution/postgres:/var/lib/postgresql/data
+    restart: unless-stopped
     environment:
-      - POSTGRES_DB=evolution
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=evolution
-    networks:
-      - evolution-network
-
-  redis-chatwoot:
-    image: redis:alpine
-    container_name: redis-chatwoot
-    hostname: redis-chatwoot
-    restart: always
-    command: ["sh", "-c", "redis-server --requirepass \"$REDIS_PASSWORD\""]
-    env_file:
-      - .env
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - ./database/chatwoot/redis:/data
-    networks:
-      - evolution-network
+      - pgdata:/var/lib/postgresql/data
 
   redis-evolution:
-    image: redis:alpine
-    container_name: redis-evolution
-    hostname: redis-evolution
-    restart: always
+    image: redis:8
+    restart: unless-stopped
     command:
       - redis-server
-      - --appendonly
-      - "yes"
-      - --port
-      - "6379"
-    env_file:
-      - ./evolution-api/.env
-    volumes:
-      - ./database/evolution/redis:/data
-    networks:
-      - evolution-network
+      - --loadmodule
+      - /usr/local/lib/redis/modules/redisbloom.so
+      - --loadmodule
+      - /usr/local/lib/redis/modules/redisearch.so
+      - --loadmodule
+      - /usr/local/lib/redis/modules/redistimeseries.so
+      - --loadmodule
+      - /usr/local/lib/redis/modules/rejson.so
 
   rabbitmq:
     image: rabbitmq:3-management
-    container_name: rabbitmq
-    hostname: rabbitmq
-    restart: always
+    restart: unless-stopped
     environment:
-      RABBITMQ_ERLANG_COOKIE: SWQOKODSQALRPCLNMEQG
-      RABBITMQ_DEFAULT_USER: rabbitmq
-      RABBITMQ_DEFAULT_PASS: rabbitmq
-    ports:
-      - 5672:5672
-      - 15672:15672
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE}
     volumes:
-      - ./database/evolution/rabbitmq:/var/lib/rabbitmq
-    networks:
-      - evolution-network
+      - rabbitmqdata:/var/lib/rabbitmq
 
-  evolution:
-    image: atendai/evolution-api:v2.2.1
-    container_name: evolution-api
-    volumes:
-      - ./evolution-api/evolution_instances:/evolution/instances
+  evolution-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
     env_file:
-      - ./evolution-api/.env
-    networks:
-      - evolution-network
+      - .env
+      - evolution/.env
+    depends_on:
+      - postgres-evolution
+      - redis-evolution
+      - rabbitmq
 
   nginx:
-    build:
-      context: ./nginx
-      dockerfile: Dockerfile
-    container_name: nginx
-    entrypoint: nginx -g "daemon off;"
+    image: nginx:1.23-alpine
+    restart: unless-stopped
     ports:
-      - 8080:8080   # Evolution API
-      - 8081:8081   # Chatwoot
-      - 8082:8082   # pgAdmin (if you add it)
-    networks:
-      - evolution-network
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - evolution
+      - evolution-api
 
-networks:
-  evolution-network:
-    driver: bridge
-    name: evolution-network
+volumes:
+  pgdata:
+  rabbitmqdata:
