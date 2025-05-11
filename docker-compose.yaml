@@ -1,58 +1,7 @@
+# docker-compose.yaml
+version: '3.8'
+
 services:
-  base: &base
-    image: sendingtk/chatwoot:v3.14.1
-    container_name: chatwoot
-    hostname: lchatwoot
-    env_file: .env
-    stdin_open: true
-    tty: true
-    networks:
-      - evolution-network
-
-  rails:
-    <<: *base
-    container_name: chatwoot-rails
-    hostname: chatwoot-rails
-    depends_on:
-      - postgres-chatwoot
-      - redis-chatwoot
-    environment:
-      - NODE_ENV=production
-      - RAILS_ENV=production
-    networks:
-      - evolution-network
-    entrypoint: docker/entrypoints/rails.sh
-    command: ['bundle', 'exec', 'rails', 's', '-p', '3000', '-b', '0.0.0.0']
-
-  sidekiq:
-    <<: *base
-    container_name: chatwoot-sidekiq
-    hostname: chatwoot-sidekiq
-    depends_on:
-      - postgres-chatwoot
-      - redis-chatwoot
-    environment:
-      - NODE_ENV=production
-      - RAILS_ENV=production
-    networks:
-      - evolution-network
-    restart: unless-stopped
-    command: ['bundle', 'exec', 'sidekiq', '-C', 'config/sidekiq.yml']
-
-  postgres-chatwoot:
-    image: postgres:14
-    container_name: postgres-chatwoot
-    hostname: postgres-chatwoot
-    restart: always
-    volumes:
-      - ./database/chatwoot/postgres:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_DB=chatwoot
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=chatwoot
-    networks:
-      - evolution-network
-
   postgres-evolution:
     image: postgres:14
     container_name: postgres-evolution
@@ -67,25 +16,14 @@ services:
     networks:
       - evolution-network
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: chatwoot-pgadmin4
-    hostname: chatwoot-pgadmin4
-    environment:
-      PGADMIN_DEFAULT_EMAIL: "demo@demo.com.br"
-      PGADMIN_DEFAULT_PASSWORD: "PgAdmin2021!"
-    depends_on:
-      - postgres-chatwoot
-    networks:
-      - evolution-network
-
   redis-chatwoot:
     image: redis:alpine
     container_name: redis-chatwoot
     hostname: redis-chatwoot
     restart: always
     command: ["sh", "-c", "redis-server --requirepass \"$REDIS_PASSWORD\""]
-    env_file: .env
+    env_file:
+      - .env
     volumes:
       - ./database/chatwoot/redis:/data
     networks:
@@ -96,7 +34,12 @@ services:
     container_name: redis-evolution
     hostname: redis-evolution
     restart: always
-    command: [ "redis-server", "--appendonly", "yes", "--port", "6379" ]
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --port
+      - "6379"
     env_file:
       - ./evolution-api/.env
     volumes:
@@ -106,12 +49,13 @@ services:
 
   rabbitmq:
     image: rabbitmq:3-management
-    hostname: "rabbitmq"
-    environment:
-      RABBITMQ_ERLANG_COOKIE: "SWQOKODSQALRPCLNMEQG"
-      RABBITMQ_DEFAULT_USER: "rabbitmq"
-      RABBITMQ_DEFAULT_PASS: "rabbitmq"
     container_name: rabbitmq
+    hostname: rabbitmq
+    restart: always
+    environment:
+      RABBITMQ_ERLANG_COOKIE: SWQOKODSQALRPCLNMEQG
+      RABBITMQ_DEFAULT_USER: rabbitmq
+      RABBITMQ_DEFAULT_PASS: rabbitmq
     ports:
       - 5672:5672
       - 15672:15672
@@ -125,10 +69,10 @@ services:
     container_name: evolution-api
     volumes:
       - ./evolution-api/evolution_instances:/evolution/instances
-    networks:
-      - evolution-network
     env_file:
       - ./evolution-api/.env
+    networks:
+      - evolution-network
 
   nginx:
     build:
@@ -137,48 +81,15 @@ services:
     container_name: nginx
     entrypoint: nginx -g "daemon off;"
     ports:
-      - "8080:8080" #Evolution
-      - "8081:8081" #Chatwoot
-      - "8082:8082" #pgadmin
+      - 8080:8080   # Evolution API
+      - 8081:8081   # Chatwoot
+      - 8082:8082   # pgAdmin (if you add it)
     networks:
       - evolution-network
     depends_on:
       - evolution
-  minio:
-    image: minio/minio
-    container_name: minio
-    restart: unless-stopped
-    command: server /data --address ":9100" --console-address ":9101"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    ports:
-      - "9100:9100"  # ✅ MinIO API Port
-      - "9101:9101"  # ✅ MinIO Console Port
-    volumes:
-      - minio_data:/data
-    networks:
-      - evolution-network
 
-
-  minio-client:
-    image: minio/mc
-    container_name: minio-client
-    depends_on:
-      - minio
-    entrypoint: >
-      /bin/sh -c "
-      /usr/bin/mc alias set minio http://minio:9100 minioadmin miniosecret &&
-      /usr/bin/mc ls minio/chatwoot-storage || /usr/bin/mc mb minio/chatwoot-storage;
-      exit 0;
-      "
-    networks:
-      - evolution-network
-
-volumes:
-  minio_data:
-  
 networks:
   evolution-network:
-    name: evolution-network
     driver: bridge
+    name: evolution-network
