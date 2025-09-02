@@ -52,7 +52,18 @@ services:
       - POSTGRES_PASSWORD=chatwoot
     networks:
       - evolution-network
-
+    command: # <--- ADDED THIS SECTION
+      - "postgres"
+      - "-c"
+      - "max_connections=2000"
+      - "-c"
+      - "shared_buffers=1000MB"
+      - "-c"
+      - "work_mem=500MB"
+      - "-c"
+      - "maintenance_work_mem=500MB"
+      - "-c"
+      - "max_stack_depth=2MB" # Note: Default is usually 2MB, 1MB is smaller.
   postgres-evolution:
     image: postgres:14
     container_name: postgres-evolution
@@ -121,7 +132,7 @@ services:
       - evolution-network
 
   evolution:
-    image: atendai/evolution-api:v2.2.1
+    image: evoapicloud/evolution-api:v2.3.1
     container_name: evolution-api
     volumes:
       - ./evolution-api/evolution_instances:/evolution/instances
